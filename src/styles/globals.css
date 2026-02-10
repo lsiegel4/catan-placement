@@ -1,0 +1,202 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Parchment & Earth Tones */
+  --parchment-light: #f5e6c8;
+  --parchment: #e8d4a8;
+  --parchment-dark: #d4bc8a;
+  --sepia: #8b7355;
+  --sepia-dark: #5c4a37;
+  --ink: #2a1f14;
+  --ink-faded: #4a3f34;
+
+  /* Ocean & Water */
+  --ocean-deep: #1a3a4a;
+  --ocean: #2d5a6b;
+  --ocean-light: #4a8fa8;
+  --wave-foam: #a8c8d8;
+
+  /* Copper & Gold Accents */
+  --copper: #b87333;
+  --copper-light: #d4956a;
+  --gold: #c9a227;
+  --gold-muted: #a89045;
+
+  /* Resource Colors - Muted, Map-like */
+  --wheat: #d4a84b;
+  --wheat-stroke: #a07830;
+  --wood: #4a6b3a;
+  --wood-stroke: #2d4022;
+  --brick: #a65d3f;
+  --brick-stroke: #6b3a28;
+  --ore: #6b7280;
+  --ore-stroke: #4a4f57;
+  --sheep: #7ba368;
+  --sheep-stroke: #4a6b3a;
+  --desert: #c9b896;
+  --desert-stroke: #8b7355;
+
+  /* Scoring */
+  --score-excellent: #2d6b4f;
+  --score-good: #6b8a3a;
+  --score-moderate: #a89045;
+  --score-poor: #8b5a3a;
+
+  /* UI States */
+  --vertex-available: rgba(90, 70, 50, 0.4);
+  --vertex-recommended: #2d6b4f;
+  --vertex-selected: #b87333;
+  --vertex-occupied: #6b3a28;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Crimson Pro', Georgia, serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--parchment);
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+/* Parchment texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.04;
+}
+
+/* Vignette effect */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9998;
+  background: radial-gradient(ellipse at center, transparent 0%, transparent 60%, rgba(42, 31, 20, 0.15) 100%);
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Cinzel', serif;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--parchment-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--sepia);
+  border-radius: 4px;
+  border: 2px solid var(--parchment-dark);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sepia-dark);
+}
+
+/* Decorative border pattern */
+.ornate-border {
+  border: 2px solid var(--sepia);
+  position: relative;
+}
+
+.ornate-border::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  border: 1px solid var(--sepia);
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* Animated compass rose for loading states */
+@keyframes compass-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Fade in animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+
+/* Staggered animation delays */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+
+/* Paper edge effect */
+.paper-edge {
+  box-shadow:
+    0 1px 1px rgba(0,0,0,0.05),
+    0 2px 2px rgba(0,0,0,0.05),
+    0 4px 4px rgba(0,0,0,0.05),
+    0 8px 8px rgba(0,0,0,0.05),
+    inset 0 0 40px rgba(139, 115, 85, 0.1);
+}
+
+/* Pressed/inset effect */
+.inset-shadow {
+  box-shadow: inset 2px 2px 6px rgba(0,0,0,0.1), inset -1px -1px 4px rgba(255,255,255,0.3);
+}
+
+/* Raised effect */
+.raised-shadow {
+  box-shadow:
+    2px 2px 4px rgba(0,0,0,0.15),
+    -1px -1px 2px rgba(255,255,255,0.3);
+}
