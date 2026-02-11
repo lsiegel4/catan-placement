@@ -3,7 +3,10 @@
     "allow": [
       "WebSearch",
       "Bash(npm create:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(npm run build:*)",
+      "Bash(curl:*)",
+      "Bash(node:*)"
     ]
   }
 }

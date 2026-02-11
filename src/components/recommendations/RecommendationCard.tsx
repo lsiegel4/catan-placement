@@ -1,4 +1,5 @@
-import { VertexScore } from '@/types/scoring';
+import { VertexScore, ScoreBreakdown } from '@/types/scoring';
+import { DEFAULT_WEIGHTS } from '@/types/scoring';
 
 interface RecommendationCardProps {
   recommendation: VertexScore;
@@ -17,6 +18,22 @@ const RANK_STYLES = [
   { bg: 'var(--parchment-dark)', border: 'var(--sepia)', glow: false },      // 5th
 ];
 
+// Map score keys to display info
+const SCORE_META: {
+  key: keyof typeof DEFAULT_WEIGHTS;
+  breakdownKey: keyof ScoreBreakdown;
+  label: string;
+  color: string;
+}[] = [
+  { key: 'probability', breakdownKey: 'probabilityScore', label: 'Yield', color: '#c9a227' },
+  { key: 'diversity', breakdownKey: 'diversityScore', label: 'Variety', color: '#6b8e23' },
+  { key: 'numberQuality', breakdownKey: 'numberQualityScore', label: 'Fortune', color: '#b8860b' },
+  { key: 'port', breakdownKey: 'portScore', label: 'Port', color: '#4a90a4' },
+  { key: 'scarcity', breakdownKey: 'scarcityScore', label: 'Scarcity', color: '#9b59b6' },
+  { key: 'expansion', breakdownKey: 'expansionScore', label: 'Growth', color: '#27ae60' },
+  { key: 'complement', breakdownKey: 'complementScore', label: 'Synergy', color: '#b87333' },
+];
+
 export function RecommendationCard({
   recommendation,
   rank,
@@ -29,6 +46,16 @@ export function RecommendationCard({
 
   // Calculate a quality rating (1-5 stars, shown as compass points)
   const quality = Math.min(5, Math.max(1, Math.round((totalScore / 3) * 5)));
+
+  // Compute weighted contributions for the bar chart
+  const contributions = SCORE_META
+    .map(meta => ({
+      ...meta,
+      raw: breakdown[meta.breakdownKey] || 0,
+      weight: DEFAULT_WEIGHTS[meta.key],
+      contribution: (breakdown[meta.breakdownKey] || 0) * DEFAULT_WEIGHTS[meta.key],
+    }))
+    .filter(c => c.contribution > 0.001);
 
   return (
     <div
@@ -109,38 +136,71 @@ export function RecommendationCard({
         {explanation}
       </div>
 
-      {/* Advanced Mode: Score Breakdown */}
-      {explanationMode === 'advanced' && (
-        <div
-          className="mt-3 pt-3 grid grid-cols-3 gap-2 text-xs"
-          style={{ borderTop: '1px dashed var(--sepia)' }}
-        >
-          <div className="text-center">
-            <div
-              className="font-medium"
-              style={{ color: 'var(--ink)', fontFamily: 'Cinzel, serif' }}
-            >
-              {(breakdown.probabilityScore * 100).toFixed(0)}%
-            </div>
-            <div style={{ color: 'var(--ink-faded)' }}>Yield</div>
+      {/* Score contribution bar chart (both modes, but compact in guide) */}
+      {explanationMode === 'advanced' ? (
+        /* Scholar: detailed contribution bars with labels */
+        <div className="mt-3 pt-3" style={{ borderTop: '1px dashed var(--sepia)' }}>
+          <div className="text-xs mb-2" style={{ color: 'var(--ink-faded)', fontFamily: 'Cinzel, serif' }}>
+            Score Contributions
           </div>
-          <div className="text-center">
-            <div
-              className="font-medium"
-              style={{ color: 'var(--ink)', fontFamily: 'Cinzel, serif' }}
-            >
-              {(breakdown.diversityScore * 100).toFixed(0)}%
-            </div>
-            <div style={{ color: 'var(--ink-faded)' }}>Variety</div>
+          <div className="space-y-1.5">
+            {contributions
+              .sort((a, b) => b.contribution - a.contribution)
+              .map(c => {
+                const barWidth = Math.max(4, (c.contribution / totalScore) * 100);
+                return (
+                  <div key={c.key} className="flex items-center gap-2 text-xs">
+                    <span className="w-16 text-right shrink-0" style={{ color: 'var(--ink-faded)' }}>
+                      {c.label}
+                    </span>
+                    <div
+                      className="flex-1 rounded-full overflow-hidden"
+                      style={{ height: 8, background: 'var(--parchment-dark)' }}
+                    >
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${barWidth}%`, background: c.color, opacity: 0.8 }}
+                      />
+                    </div>
+                    <span
+                      className="w-10 text-right shrink-0 tabular-nums"
+                      style={{ color: 'var(--ink)', fontFamily: 'Cinzel, serif' }}
+                    >
+                      {c.contribution.toFixed(2)}
+                    </span>
+                  </div>
+                );
+              })}
           </div>
-          <div className="text-center">
-            <div
-              className="font-medium"
-              style={{ color: 'var(--ink)', fontFamily: 'Cinzel, serif' }}
-            >
-              {(breakdown.numberQualityScore / 3 * 100).toFixed(0)}%
-            </div>
-            <div style={{ color: 'var(--ink-faded)' }}>Fortune</div>
+        </div>
+      ) : (
+        /* Guide: simple stacked bar showing composition at a glance */
+        <div className="mt-3 pt-2" style={{ borderTop: '1px dashed var(--sepia)' }}>
+          <div className="flex rounded-full overflow-hidden" style={{ height: 6 }}>
+            {contributions
+              .sort((a, b) => b.contribution - a.contribution)
+              .map(c => (
+                <div
+                  key={c.key}
+                  title={`${c.label}: ${((c.contribution / totalScore) * 100).toFixed(0)}%`}
+                  style={{
+                    width: `${(c.contribution / totalScore) * 100}%`,
+                    background: c.color,
+                    opacity: 0.7,
+                  }}
+                />
+              ))}
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-xs" style={{ color: 'var(--ink-faded)' }}>
+            {contributions
+              .sort((a, b) => b.contribution - a.contribution)
+              .slice(0, 4) // top 4 only in guide
+              .map(c => (
+                <span key={c.key} className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full" style={{ background: c.color, opacity: 0.7 }} />
+                  {c.label}
+                </span>
+              ))}
           </div>
         </div>
       )}

@@ -7,6 +7,7 @@ export interface ScoreBreakdown {
   portScore: number;            // Port access value
   expansionScore: number;       // Available adjacent vertices
   scarcityScore: number;        // Rare resource bonus
+  complementScore: number;      // Bonus for complementing existing settlements
 }
 
 export interface VertexScore {
@@ -23,6 +24,7 @@ export interface ScoreWeights {
   port: number;             // Port access
   expansion: number;        // Future placement options
   scarcity: number;         // Rare resource bonus
+  complement: number;       // Complement existing settlements
 }
 
 export const DEFAULT_WEIGHTS: ScoreWeights = {
@@ -32,4 +34,5 @@ export const DEFAULT_WEIGHTS: ScoreWeights = {
   port: 0.5,
   expansion: 0.4,
   scarcity: 0.3,
+  complement: 0.7,
 };

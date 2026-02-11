@@ -33,11 +33,17 @@ export interface Edge {
   playerColor?: string;
 }
 
+export interface PortPlacement {
+  type: PortType;
+  vertices: [string, string]; // The two vertex IDs this port connects
+}
+
 export interface BoardState {
   hexes: Map<string, HexTile>;
   vertices: Map<string, Vertex>;
   edges: Map<string, Edge>;
-  ports: Map<string, PortType>; // vertex ID -> port type
+  ports: Map<string, PortType>; // vertex ID -> port type (quick lookup)
+  portPlacements: PortPlacement[]; // for rendering and generation
 }
 
 export interface GameState {

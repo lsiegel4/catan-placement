@@ -1,17 +1,26 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { BoardState } from '@/types/board';
 import { generateRandomBoard } from '@/lib/board/boardGeneration';
 import { HexGrid } from '@/components/board/HexGrid';
 import { RecommendationPanel } from '@/components/recommendations/RecommendationPanel';
 import { getTopRecommendations } from '@/lib/scoring/scoreCalculator';
+import { placeSettlement, removeSettlement } from '@/lib/game/placementRules';
+
+const PLAYER_COLORS = [
+  { id: 'red', label: 'You', color: '#e74c3c', textColor: '#fff' },
+  { id: 'blue', label: 'P2', color: '#3498db', textColor: '#fff' },
+  { id: 'orange', label: 'P3', color: '#e67e22', textColor: '#fff' },
+  { id: 'white', label: 'P4', color: '#ecf0f1', textColor: '#333' },
+];
 
 function App() {
   const [board, setBoard] = useState<BoardState>(() => generateRandomBoard());
   const [selectedVertex, setSelectedVertex] = useState<string | null>(null);
   const [explanationMode, setExplanationMode] = useState<'beginner' | 'advanced'>('beginner');
+  const [activeColor, setActiveColor] = useState<string>('red');
 
   const recommendations = useMemo(
-    () => getTopRecommendations(board, 5, undefined, explanationMode),
+    () => getTopRecommendations(board, 5, undefined, explanationMode, 'red'),
     [board, explanationMode]
   );
 
@@ -20,13 +29,52 @@ function App() {
     setSelectedVertex(null);
   };
 
-  const handleVertexClick = (vertexId: string) => {
-    setSelectedVertex(vertexId);
-  };
+  const handleVertexClick = useCallback((vertexId: string) => {
+    const vertex = board.vertices.get(vertexId);
+    if (!vertex) return;
+
+    if (vertex.hasSettlement) {
+      // Remove settlement on click
+      setBoard(prev => removeSettlement(vertexId, prev));
+      setSelectedVertex(null);
+    } else {
+      // First click selects, second click on same vertex places settlement
+      if (selectedVertex === vertexId) {
+        setBoard(prev => placeSettlement(vertexId, prev, activeColor));
+        setSelectedVertex(null);
+      } else {
+        setSelectedVertex(vertexId);
+      }
+    }
+  }, [board, selectedVertex, activeColor]);
 
   const handleModeToggle = () => {
     setExplanationMode(prev => prev === 'beginner' ? 'advanced' : 'beginner');
   };
+
+  const handleClearAll = () => {
+    setBoard(prev => {
+      const newVertices = new Map(prev.vertices);
+      newVertices.forEach((v, id) => {
+        if (v.hasSettlement) {
+          newVertices.set(id, { ...v, hasSettlement: false, playerColor: undefined });
+        }
+      });
+      return { ...prev, vertices: newVertices };
+    });
+    setSelectedVertex(null);
+  };
+
+  // Count settlements per player
+  const settlementCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    board.vertices.forEach(v => {
+      if (v.hasSettlement && v.playerColor) {
+        counts[v.playerColor] = (counts[v.playerColor] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [board]);
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, var(--parchment-light) 0%, var(--parchment) 50%, var(--parchment-dark) 100%)' }}>
@@ -134,8 +182,61 @@ function App() {
                 recommendations={recommendations}
               />
 
+              {/* Settlement Controls */}
+              <div className="mt-6 pt-4" style={{ borderTop: '1px solid var(--sepia)' }}>
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  {/* Player color picker */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs" style={{ color: 'var(--ink-faded)', fontFamily: 'Cinzel, serif' }}>
+                      Place as:
+                    </span>
+                    {PLAYER_COLORS.map(pc => (
+                      <button
+                        key={pc.id}
+                        onClick={() => setActiveColor(pc.id)}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                          activeColor === pc.id ? 'ring-2 ring-offset-1' : 'opacity-60 hover:opacity-100'
+                        }`}
+                        style={{
+                          background: pc.color,
+                          color: pc.textColor,
+                        }}
+                      >
+                        {pc.label}
+                        {(settlementCounts[pc.id] || 0) > 0 && (
+                          <span className="ml-1 opacity-80">({settlementCounts[pc.id]})</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2">
+                    {Object.keys(settlementCounts).length > 0 && (
+                      <button
+                        onClick={handleClearAll}
+                        className="px-3 py-1.5 rounded text-xs transition-all hover:opacity-80"
+                        style={{
+                          background: 'var(--parchment-dark)',
+                          color: 'var(--ink-faded)',
+                          border: '1px solid var(--sepia)',
+                        }}
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Hint */}
+                <p className="text-xs mt-2 italic" style={{ color: 'var(--ink-faded)' }}>
+                  Click a position to select it, click again to place. Click a settlement to remove it.
+                  {(settlementCounts['red'] || 0) > 0 && ' Recommendations now complement your settlements.'}
+                </p>
+              </div>
+
               {/* Legend */}
-              <div className="mt-6 pt-4 flex flex-wrap justify-center gap-4 text-xs" style={{ borderTop: '1px solid var(--sepia)', color: 'var(--ink-faded)' }}>
+              <div className="mt-4 pt-3 flex flex-wrap justify-center gap-4 text-xs" style={{ borderTop: '1px solid var(--sepia)', color: 'var(--ink-faded)' }}>
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full" style={{ background: 'var(--vertex-recommended)' }} />
                   <span>Best Position</span>

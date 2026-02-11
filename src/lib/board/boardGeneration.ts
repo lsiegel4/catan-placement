@@ -1,6 +1,6 @@
 // Board generation and initialization
 
-import { BoardState, HexTile, Vertex, ResourceType } from '@/types/board';
+import { BoardState, HexTile, Vertex, ResourceType, PortType, PortPlacement } from '@/types/board';
 import { STANDARD_HEX_POSITIONS } from '@/constants/boardLayout';
 import { STANDARD_NUMBER_DISTRIBUTION } from '@/constants/numbers';
 import {
@@ -10,6 +10,7 @@ import {
   VertexDirection,
 } from '@/lib/geometry/hexCoordinates';
 import { hexToPixel, getVertexPixelOffset, HEX_SIZE } from '@/lib/geometry/pixelConversion';
+import { computeCoastalData, PORT_EDGE_INDICES } from './coastalGeometry';
 
 // Shuffle array using Fisher-Yates algorithm
 function shuffle<T>(array: T[]): T[] {
@@ -117,6 +118,39 @@ function assignNumbersWithRule(
   return result;
 }
 
+// Standard port type distribution (randomized to positions each game)
+const PORT_TYPES: PortType[] = [
+  '3:1', '3:1', '3:1', '3:1',
+  '2:1:wheat', '2:1:wood', '2:1:brick', '2:1:ore', '2:1:sheep',
+];
+
+// Assign randomized ports to coastal edges
+function assignPorts(hexes: Map<string, HexTile>): {
+  portPlacements: PortPlacement[];
+  ports: Map<string, PortType>;
+} {
+  const { vertices: coastal } = computeCoastalData(hexes, HEX_SIZE);
+  const n = coastal.length;
+  const shuffledTypes = shuffle(PORT_TYPES);
+
+  const portPlacements: PortPlacement[] = [];
+  const ports = new Map<string, PortType>();
+
+  PORT_EDGE_INDICES.forEach((edgeIdx, i) => {
+    const v1Key = coastal[edgeIdx % n].key;
+    const v2Key = coastal[(edgeIdx + 1) % n].key;
+    const v1Id = `vertex_${v1Key}`;
+    const v2Id = `vertex_${v2Key}`;
+    const type = shuffledTypes[i];
+
+    portPlacements.push({ type, vertices: [v1Id, v2Id] });
+    ports.set(v1Id, type);
+    ports.set(v2Id, type);
+  });
+
+  return { portPlacements, ports };
+}
+
 // Generate a random standard board
 export function generateRandomBoard(): BoardState {
   // Standard resource distribution (3-4 player)
@@ -154,11 +188,23 @@ export function generateRandomBoard(): BoardState {
   // Generate unique vertices (deduplicated)
   const vertices = generateUniqueVertices(hexes);
 
+  // Assign randomized ports
+  const { portPlacements, ports } = assignPorts(hexes);
+
+  // Mark vertices that have port access
+  ports.forEach((portType, vertexId) => {
+    const vertex = vertices.get(vertexId);
+    if (vertex) {
+      vertex.hasPort = portType;
+    }
+  });
+
   return {
     hexes,
     vertices,
     edges: new Map(),
-    ports: new Map(),
+    ports,
+    portPlacements,
   };
 }
 
@@ -296,5 +342,6 @@ export function createEmptyBoard(): BoardState {
     vertices,
     edges: new Map(),
     ports: new Map(),
+    portPlacements: [],
   };
 }

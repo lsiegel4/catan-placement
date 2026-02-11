@@ -25,11 +25,19 @@ export function Vertex({ vertex, isSelected, isTopRecommendation, score, onClick
   let showPulse = false;
   let glowColor = '';
 
+  const SETTLEMENT_COLORS: Record<string, { fill: string; stroke: string }> = {
+    red: { fill: '#e74c3c', stroke: '#c0392b' },
+    blue: { fill: '#3498db', stroke: '#2471a3' },
+    orange: { fill: '#e67e22', stroke: '#ca6f1e' },
+    white: { fill: '#ecf0f1', stroke: '#bdc3c7' },
+  };
+
   if (vertex.hasSettlement) {
-    fill = '#e74c3c';
+    const colors = SETTLEMENT_COLORS[vertex.playerColor || 'red'] || SETTLEMENT_COLORS.red;
+    fill = colors.fill;
     radius = 12;
     strokeWidth = 2;
-    stroke = '#c0392b';
+    stroke = colors.stroke;
   } else if (isTopRecommendation) {
     fill = '#27ae60';
     radius = 11;
@@ -142,11 +150,11 @@ export function Vertex({ vertex, isSelected, isTopRecommendation, score, onClick
         <g transform={`translate(${x}, ${y})`}>
           <polygon
             points="0,-8 8,0 8,7 -8,7 -8,0"
-            fill="#f5f0e1"
-            stroke="#5c4a37"
+            fill={fill}
+            stroke={stroke}
             strokeWidth="1.5"
           />
-          <rect x="-3" y="1" width="6" height="6" fill="#8b7355" />
+          <rect x="-3" y="1" width="6" height="6" fill="rgba(0,0,0,0.15)" />
         </g>
       )}
 

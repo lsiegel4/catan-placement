@@ -71,7 +71,7 @@ export function HexGrid({ board, selectedVertex, onVertexClick, recommendations 
 
         <g transform={`translate(${offsetX}, ${offsetY})`}>
           {/* Ocean background with border */}
-          <OceanBorder hexes={hexArray} hexSize={HEX_SIZE} />
+          <OceanBorder hexes={hexArray} hexSize={HEX_SIZE} portPlacements={board.portPlacements} />
 
           {/* Render hexes */}
           {hexArray.map(hex => (
