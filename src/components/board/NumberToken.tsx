@@ -2,9 +2,11 @@ import { NUMBER_DOTS } from '@/constants/numbers';
 
 interface NumberTokenProps {
   number: number;
+  isEditing?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
 }
 
-export function NumberToken({ number }: NumberTokenProps) {
+export function NumberToken({ number, isEditing, onClick }: NumberTokenProps) {
   const dots = NUMBER_DOTS[number] || 0;
 
   // Colonist.io style: red for 6/8, black for others
@@ -12,7 +14,10 @@ export function NumberToken({ number }: NumberTokenProps) {
   const textColor = isHighProbability ? '#c41e3a' : '#1a1a1a';
 
   return (
-    <g>
+    <g
+      onClick={isEditing ? onClick : undefined}
+      style={{ cursor: isEditing ? 'pointer' : undefined }}
+    >
       {/* Outer shadow */}
       <circle
         cx="1"
@@ -30,6 +35,19 @@ export function NumberToken({ number }: NumberTokenProps) {
         stroke="#8b7355"
         strokeWidth="2"
       />
+
+      {/* Edit mode ring */}
+      {isEditing && (
+        <circle
+          cx="0"
+          cy="0"
+          r="17"
+          fill="none"
+          stroke="rgba(255,255,255,0.85)"
+          strokeWidth="1.5"
+          strokeDasharray="3 2"
+        />
+      )}
 
       {/* Number */}
       <text

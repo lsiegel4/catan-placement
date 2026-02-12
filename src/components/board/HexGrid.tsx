@@ -12,9 +12,12 @@ interface HexGridProps {
   onVertexClick: (vertexId: string) => void;
   recommendations: VertexScore[];
   isSetupComplete: boolean;
+  isEditing: boolean;
+  onEditHexResource: (hexId: string) => void;
+  onEditHexNumber: (hexId: string) => void;
 }
 
-export function HexGrid({ board, selectedVertex, onVertexClick, recommendations, isSetupComplete }: HexGridProps) {
+export function HexGrid({ board, selectedVertex, onVertexClick, recommendations, isSetupComplete, isEditing, onEditHexResource, onEditHexNumber }: HexGridProps) {
   const hexArray = Array.from(board.hexes.values());
   const allVertices = Array.from(board.vertices.values());
 
@@ -24,6 +27,7 @@ export function HexGrid({ board, selectedVertex, onVertexClick, recommendations,
   // - Otherwise only show vertices that are valid placement spots (or the selected one)
   const shouldShow = (v: VertexType): boolean => {
     if (v.hasSettlement) return true;
+    if (isEditing) return false; // hide dots while editing the board layout
     if (isSetupComplete) return false;
     return isValidPlacement(v.id, board) || v.id === selectedVertex;
   };
@@ -89,7 +93,13 @@ export function HexGrid({ board, selectedVertex, onVertexClick, recommendations,
 
           {/* Render hexes */}
           {hexArray.map(hex => (
-            <HexTile key={hex.id} hex={hex} />
+            <HexTile
+              key={hex.id}
+              hex={hex}
+              isEditing={isEditing}
+              onResourceClick={() => onEditHexResource(hex.id)}
+              onNumberClick={e => { e.stopPropagation(); onEditHexNumber(hex.id); }}
+            />
           ))}
 
           {/* Render vertices on top */}

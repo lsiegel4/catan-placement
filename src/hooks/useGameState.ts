@@ -1,13 +1,17 @@
 import { useState, useCallback, useMemo } from 'react';
 import { BoardState } from '@/types/board';
-import { generateRandomBoard, generateBalancedBoard } from '@/lib/board/boardGeneration';
+import { generateRandomBoard, generateBalancedBoard, createEmptyBoard } from '@/lib/board/boardGeneration';
 import {
   placeSettlement as doPlace,
   removeSettlement as doRemove,
 } from '@/lib/game/placementRules';
 import { PLAYER_COLORS } from '@/constants/players';
+import { ResourceType } from '@/types/board';
 
-export type BoardMode = 'random' | 'balanced';
+export type BoardMode = 'random' | 'balanced' | 'manual';
+
+const RESOURCE_CYCLE: ResourceType[] = ['desert', 'wheat', 'wood', 'brick', 'ore', 'sheep'];
+const NUMBER_CYCLE: (number | null)[] = [null, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12];
 
 // Generate snake draft indices: [0,1,...,n-1, n-1,...,1,0]
 function buildSnakeDraft(playerCount: number): number[] {
@@ -54,6 +58,8 @@ export interface UseGameState {
   setPlayerCount: (n: number) => void;
   setBoardMode: (mode: BoardMode) => void;
   generateNewBoard: () => void;
+  editHexResource: (hexId: string) => void;
+  editHexNumber: (hexId: string) => void;
 }
 
 export function useGameState(): UseGameState {
@@ -116,17 +122,45 @@ export function useGameState(): UseGameState {
 
   const setPlayerCount = useCallback((n: number) => {
     setPlayerCountState(n);
-    setBoard(boardMode === 'balanced' ? generateBalancedBoard() : generateRandomBoard());
+    setBoard(boardMode === 'balanced' ? generateBalancedBoard() : boardMode === 'manual' ? createEmptyBoard() : generateRandomBoard());
   }, [boardMode]);
 
   const setBoardMode = useCallback((mode: BoardMode) => {
     setBoardModeState(mode);
-    setBoard(mode === 'balanced' ? generateBalancedBoard() : generateRandomBoard());
+    setBoard(mode === 'balanced' ? generateBalancedBoard() : mode === 'manual' ? createEmptyBoard() : generateRandomBoard());
   }, []);
 
   const generateNewBoard = useCallback(() => {
-    setBoard(boardMode === 'balanced' ? generateBalancedBoard() : generateRandomBoard());
+    setBoard(boardMode === 'balanced' ? generateBalancedBoard() : boardMode === 'manual' ? createEmptyBoard() : generateRandomBoard());
   }, [boardMode]);
+
+  const editHexResource = useCallback((hexId: string) => {
+    setBoard(prev => {
+      const hex = prev.hexes.get(hexId);
+      if (!hex) return prev;
+      const nextResource = RESOURCE_CYCLE[(RESOURCE_CYCLE.indexOf(hex.resource) + 1) % RESOURCE_CYCLE.length];
+      const newHexes = new Map(prev.hexes);
+      newHexes.set(hexId, {
+        ...hex,
+        resource: nextResource,
+        number: nextResource === 'desert' ? null : hex.number,
+        hasRobber: nextResource === 'desert',
+      });
+      return { ...prev, hexes: newHexes };
+    });
+  }, []);
+
+  const editHexNumber = useCallback((hexId: string) => {
+    setBoard(prev => {
+      const hex = prev.hexes.get(hexId);
+      if (!hex || hex.resource === 'desert') return prev;
+      const currentIdx = NUMBER_CYCLE.indexOf(hex.number);
+      const nextNumber = NUMBER_CYCLE[(currentIdx + 1) % NUMBER_CYCLE.length];
+      const newHexes = new Map(prev.hexes);
+      newHexes.set(hexId, { ...hex, number: nextNumber });
+      return { ...prev, hexes: newHexes };
+    });
+  }, []);
 
   return {
     board,
@@ -144,5 +178,7 @@ export function useGameState(): UseGameState {
     setBoardMode,
     setPlayerCount,
     generateNewBoard,
+    editHexResource,
+    editHexNumber,
   };
 }

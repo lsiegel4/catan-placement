@@ -56,9 +56,12 @@ const RESOURCE_STYLES: Record<ResourceType, {
 
 interface HexTileProps {
   hex: HexTileType;
+  isEditing?: boolean;
+  onResourceClick?: () => void;
+  onNumberClick?: (e: React.MouseEvent) => void;
 }
 
-export function HexTile({ hex }: HexTileProps) {
+export function HexTile({ hex, isEditing, onResourceClick, onNumberClick }: HexTileProps) {
   const position = hexToPixel({ q: hex.q, r: hex.r }, HEX_SIZE);
   const points = getHexagonPoints(HEX_SIZE);
   const innerPoints = getHexagonPoints(HEX_SIZE - 3);
@@ -134,12 +137,15 @@ export function HexTile({ hex }: HexTileProps) {
         fill={`url(#${gradientId})`}
         stroke={style.stroke}
         strokeWidth="2"
+        onClick={isEditing ? onResourceClick : undefined}
+        style={{ cursor: isEditing ? 'pointer' : undefined }}
       />
 
       {/* Pattern overlay */}
       <polygon
         points={innerPoints}
         fill={`url(#${patternId})`}
+        style={{ pointerEvents: 'none' }}
       />
 
       {/* Inner highlight edge */}
@@ -148,11 +154,33 @@ export function HexTile({ hex }: HexTileProps) {
         fill="none"
         stroke="rgba(255,255,255,0.2)"
         strokeWidth="1"
+        style={{ pointerEvents: 'none' }}
       />
+
+      {/* Edit mode: dashed outline to signal clickability */}
+      {isEditing && (
+        <polygon
+          points={getHexagonPoints(HEX_SIZE - 1)}
+          fill="none"
+          stroke="rgba(255,255,255,0.5)"
+          strokeWidth="1.5"
+          strokeDasharray="5 3"
+          style={{ pointerEvents: 'none' }}
+        />
+      )}
 
       {/* Number token */}
       {hex.number !== null && (
-        <NumberToken number={hex.number} />
+        <NumberToken number={hex.number} isEditing={isEditing} onClick={onNumberClick} />
+      )}
+
+      {/* Edit mode: empty number slot for non-desert hexes with no number */}
+      {isEditing && hex.resource !== 'desert' && hex.number === null && (
+        <g onClick={onNumberClick} style={{ cursor: 'pointer' }}>
+          <circle cx="1" cy="2" r="16" fill="rgba(0,0,0,0.2)" />
+          <circle cx="0" cy="0" r="16" fill="rgba(0,0,0,0.25)" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5" strokeDasharray="4 2" />
+          <text x="0" y="1" textAnchor="middle" dominantBaseline="middle" fontSize="20" fontWeight="bold" fontFamily="Arial, sans-serif" fill="rgba(255,255,255,0.75)">+</text>
+        </g>
       )}
 
       {/* Robber for desert */}

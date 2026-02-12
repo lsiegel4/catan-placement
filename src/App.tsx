@@ -16,6 +16,9 @@ function App() {
   const [explanationMode, setExplanationMode] = useState<'beginner' | 'advanced'>('beginner');
   const [focusedRecIndex, setFocusedRecIndex] = useState<number>(0);
   const [weights, setWeights] = useState<ScoreWeights>(DEFAULT_WEIGHTS);
+  const [isEditingBoard, setIsEditingBoard] = useState(false);
+
+  const isEditing = game.boardMode === 'manual' && isEditingBoard;
 
   const recommendations = useMemo(
     () => getTopRecommendations(game.board, 5, weights, explanationMode, game.activeColor),
@@ -55,6 +58,14 @@ function App() {
     game.generateNewBoard();
     setSelectedVertex(null);
     setFocusedRecIndex(0);
+    if (game.boardMode === 'manual') setIsEditingBoard(true);
+  }, [game]);
+
+  const handleSetBoardMode = useCallback((mode: typeof game.boardMode) => {
+    game.setBoardMode(mode);
+    setSelectedVertex(null);
+    setFocusedRecIndex(0);
+    setIsEditingBoard(mode === 'manual');
   }, [game]);
 
   // Keyboard shortcut handlers
@@ -119,10 +130,10 @@ function App() {
             <div className="flex items-center gap-3 flex-wrap">
               {/* Board mode toggle */}
               <div className="flex rounded-full p-1 gap-1" style={{ background: 'var(--parchment-dark)', border: '1px solid var(--sepia)' }}>
-                {(['random', 'balanced'] as const).map(mode => (
+                {(['random', 'balanced', 'manual'] as const).map(mode => (
                   <button
                     key={mode}
-                    onClick={() => game.setBoardMode(mode)}
+                    onClick={() => handleSetBoardMode(mode)}
                     className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-300 capitalize ${
                       game.boardMode === mode ? 'raised-shadow' : 'opacity-60 hover:opacity-100'
                     }`}
@@ -131,7 +142,11 @@ function App() {
                       color: 'var(--ink)',
                       background: game.boardMode === mode ? 'var(--parchment-light)' : 'transparent',
                     }}
-                    title={mode === 'balanced' ? 'Official Catan recommended beginner setup' : 'Fully randomized board'}
+                    title={
+                      mode === 'balanced' ? 'Official Catan recommended beginner setup' :
+                      mode === 'manual' ? 'Set up the board to match your physical game' :
+                      'Fully randomized board'
+                    }
                   >
                     {mode}
                   </button>
@@ -174,10 +189,29 @@ function App() {
               style={{ background: 'linear-gradient(145deg, var(--parchment-light) 0%, var(--parchment) 50%, var(--parchment-dark) 100%)' }}
             >
               {/* Map title cartouche */}
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-8 py-2 rounded-sm" style={{ background: 'var(--parchment)', border: '2px solid var(--sepia)' }}>
-                <span className="text-sm tracking-widest uppercase" style={{ color: 'var(--sepia-dark)', fontFamily: 'Cinzel, serif' }}>
-                  {game.boardMode === 'balanced' ? 'Official Layout' : 'Territory Map'}
-                </span>
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
+                <div className="px-8 py-2 rounded-sm" style={{ background: 'var(--parchment)', border: '2px solid var(--sepia)' }}>
+                  <span className="text-sm tracking-widest uppercase" style={{ color: 'var(--sepia-dark)', fontFamily: 'Cinzel, serif' }}>
+                    {game.boardMode === 'balanced' ? 'Official Layout' : game.boardMode === 'manual' ? 'Custom Map' : 'Territory Map'}
+                  </span>
+                </div>
+                {/* Edit / Place toggle — only shown in manual mode */}
+                {game.boardMode === 'manual' && (
+                  <button
+                    onClick={() => setIsEditingBoard(e => !e)}
+                    className="px-3 py-1.5 rounded-sm text-xs font-medium transition-all duration-200 hover:opacity-90"
+                    style={{
+                      background: isEditingBoard ? 'var(--sepia)' : 'var(--parchment)',
+                      border: '2px solid var(--sepia)',
+                      color: isEditingBoard ? 'var(--parchment-light)' : 'var(--sepia-dark)',
+                      fontFamily: 'Cinzel, serif',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={isEditingBoard ? 'Finish editing and start placing settlements' : 'Edit the board layout'}
+                  >
+                    {isEditingBoard ? '✓ Done Editing' : '✏ Edit Board'}
+                  </button>
+                )}
               </div>
 
               {/* Board rating badge */}
@@ -192,6 +226,9 @@ function App() {
                 onVertexClick={handleVertexClick}
                 recommendations={recommendations}
                 isSetupComplete={game.isSetupComplete}
+                isEditing={isEditing}
+                onEditHexResource={game.editHexResource}
+                onEditHexNumber={game.editHexNumber}
               />
 
               {/* Turn tracker */}
@@ -220,7 +257,9 @@ function App() {
                   </button>
                 )}
                 <p className="text-xs italic" style={{ color: 'var(--ink-faded)' }}>
-                  Click a spot to select, click again to place. Click a settlement to remove it.
+                  {isEditing
+                    ? 'Click a hex to cycle its resource. Click a number token to cycle its value.'
+                    : 'Click a spot to select, click again to place. Click a settlement to remove it.'}
                 </p>
               </div>
 
