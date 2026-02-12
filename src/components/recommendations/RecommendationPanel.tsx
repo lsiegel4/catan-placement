@@ -1,5 +1,7 @@
-import { VertexScore } from '@/types/scoring';
+import React from 'react';
+import { VertexScore, ScoreWeights, DEFAULT_WEIGHTS } from '@/types/scoring';
 import { RecommendationCard } from './RecommendationCard';
+import { WeightsPanel } from '@/components/scoring/WeightsPanel';
 
 interface RecommendationPanelProps {
   recommendations: VertexScore[];
@@ -7,6 +9,10 @@ interface RecommendationPanelProps {
   onVertexSelect: (vertexId: string) => void;
   explanationMode: 'beginner' | 'advanced';
   onModeToggle: () => void;
+  focusedIndex: number;
+  onFocusChange: (index: number) => void;
+  weights: ScoreWeights;
+  onWeightsChange: (w: ScoreWeights) => void;
 }
 
 export function RecommendationPanel({
@@ -15,17 +21,25 @@ export function RecommendationPanel({
   onVertexSelect,
   explanationMode,
   onModeToggle,
+  focusedIndex,
+  onFocusChange,
+  weights,
+  onWeightsChange,
 }: RecommendationPanelProps) {
+  const isCustomWeights = Object.keys(DEFAULT_WEIGHTS).some(k => {
+    const w = weights as unknown as Record<string, number>;
+    const d = DEFAULT_WEIGHTS as unknown as Record<string, number>;
+    return Math.abs(w[k] - d[k]) > 0.001;
+  });
+  const [weightsOpen, setWeightsOpen] = React.useState(false);
+
   return (
     <div
       className="ornate-border paper-edge rounded-sm sticky top-8"
       style={{ background: 'linear-gradient(145deg, var(--parchment-light) 0%, var(--parchment) 100%)' }}
     >
-      {/* Header with scroll decoration */}
-      <div
-        className="relative px-6 py-4 border-b"
-        style={{ borderColor: 'var(--sepia)' }}
-      >
+      {/* Header */}
+      <div className="relative px-6 py-4 border-b" style={{ borderColor: 'var(--sepia)' }}>
         {/* Scroll/banner decoration */}
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-24 h-6">
           <svg viewBox="0 0 100 30" className="w-full h-full" preserveAspectRatio="none">
@@ -38,15 +52,12 @@ export function RecommendationPanel({
           </svg>
         </div>
 
-        <h2
-          className="text-lg text-center tracking-wider"
-          style={{ fontFamily: 'Cinzel, serif', color: 'var(--ink)' }}
-        >
+        <h2 className="text-lg text-center tracking-wider" style={{ fontFamily: 'Cinzel, serif', color: 'var(--ink)' }}>
           Strategic Positions
         </h2>
 
-        {/* Mode Toggle - styled as a wax seal toggle */}
-        <div className="flex justify-center mt-3">
+        {/* Mode toggle + weights gear */}
+        <div className="flex justify-center items-center mt-3 gap-2">
           <div
             className="flex rounded-full p-1 gap-1"
             style={{ background: 'var(--parchment-dark)', border: '1px solid var(--sepia)' }}
@@ -54,9 +65,7 @@ export function RecommendationPanel({
             <button
               onClick={onModeToggle}
               className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
-                explanationMode === 'beginner'
-                  ? 'raised-shadow'
-                  : 'opacity-60 hover:opacity-100'
+                explanationMode === 'beginner' ? 'raised-shadow' : 'opacity-60 hover:opacity-100'
               }`}
               style={{
                 fontFamily: 'Cinzel, serif',
@@ -69,9 +78,7 @@ export function RecommendationPanel({
             <button
               onClick={onModeToggle}
               className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
-                explanationMode === 'advanced'
-                  ? 'raised-shadow'
-                  : 'opacity-60 hover:opacity-100'
+                explanationMode === 'advanced' ? 'raised-shadow' : 'opacity-60 hover:opacity-100'
               }`}
               style={{
                 fontFamily: 'Cinzel, serif',
@@ -82,8 +89,36 @@ export function RecommendationPanel({
               Scholar
             </button>
           </div>
+
+          {/* Strategy / weights gear button */}
+          <button
+            onClick={() => setWeightsOpen(o => !o)}
+            className="relative w-8 h-8 rounded-full flex items-center justify-center transition-all hover:opacity-80"
+            style={{
+              background: weightsOpen ? 'var(--sepia)' : 'var(--parchment-dark)',
+              border: `1px solid var(--sepia)`,
+            }}
+            title="Strategy weights"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke={weightsOpen ? 'var(--parchment-light)' : 'var(--sepia-dark)'} strokeWidth="2">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+            </svg>
+            {/* Dot indicator when custom weights active */}
+            {isCustomWeights && (
+              <span
+                className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full"
+                style={{ background: 'var(--copper)' }}
+              />
+            )}
+          </button>
         </div>
       </div>
+
+      {/* Weights panel (collapsible) */}
+      {weightsOpen && (
+        <WeightsPanel weights={weights} onChange={onWeightsChange} />
+      )}
 
       {/* Recommendations List */}
       <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
@@ -101,18 +136,16 @@ export function RecommendationPanel({
               recommendation={recommendation}
               rank={index + 1}
               isSelected={recommendation.vertexId === selectedVertex}
-              onClick={() => onVertexSelect(recommendation.vertexId)}
+              isFocused={index === focusedIndex}
+              onClick={() => { onFocusChange(index); onVertexSelect(recommendation.vertexId); }}
               explanationMode={explanationMode}
             />
           ))
         )}
       </div>
 
-      {/* Footer with navigation hint */}
-      <div
-        className="px-4 py-3 text-center border-t"
-        style={{ borderColor: 'var(--sepia)', color: 'var(--ink-faded)' }}
-      >
+      {/* Footer */}
+      <div className="px-4 py-3 text-center border-t" style={{ borderColor: 'var(--sepia)', color: 'var(--ink-faded)' }}>
         <p className="text-xs italic flex items-center justify-center gap-2">
           <span className="opacity-60">⚓</span>
           Select a position to view details
@@ -122,3 +155,5 @@ export function RecommendationPanel({
     </div>
   );
 }
+
+

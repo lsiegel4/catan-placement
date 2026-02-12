@@ -1,7 +1,7 @@
 // Board generation and initialization
 
 import { BoardState, HexTile, Vertex, ResourceType, PortType, PortPlacement } from '@/types/board';
-import { STANDARD_HEX_POSITIONS } from '@/constants/boardLayout';
+import { STANDARD_HEX_POSITIONS, BALANCED_BOARD_LAYOUT } from '@/constants/boardLayout';
 import { STANDARD_NUMBER_DISTRIBUTION } from '@/constants/numbers';
 import {
   createHexId,
@@ -22,39 +22,40 @@ function shuffle<T>(array: T[]): T[] {
   return result;
 }
 
-// Check if placing a number at a position would violate the 6/8 adjacency rule
-function wouldViolate68Rule(
-  hexIndex: number,
-  number: number,
-  currentAssignments: Map<number, number>, // hexIndex -> number
+// Check whether a full hexIndex→number assignment satisfies all placement rules:
+//   1. No two adjacent hexes may share the same number.
+//   2. No 6 adjacent to an 8 (the classic 6/8 rule).
+//   3. No 2 adjacent to a 12 (both are 1-pip dead weight next to each other).
+function isValidNumberAssignment(
+  assignments: Map<number, number>,
   hexPositions: typeof STANDARD_HEX_POSITIONS
 ): boolean {
-  // Only check for 6 and 8
-  if (number !== 6 && number !== 8) return false;
+  for (const [idx, num] of assignments) {
+    const pos = hexPositions[idx];
 
-  const pos = hexPositions[hexIndex];
-  const neighbors = getHexNeighbors({ q: pos.q, r: pos.r });
+    for (const neighbor of getHexNeighbors({ q: pos.q, r: pos.r })) {
+      const neighborIdx = hexPositions.findIndex(
+        p => p.q === neighbor.q && p.r === neighbor.r
+      );
+      if (neighborIdx === -1 || !assignments.has(neighborIdx)) continue;
+      const neighborNum = assignments.get(neighborIdx)!;
 
-  // Check each neighbor
-  for (const neighbor of neighbors) {
-    // Find if this neighbor is in our hex positions
-    const neighborIndex = hexPositions.findIndex(
-      p => p.q === neighbor.q && p.r === neighbor.r
-    );
+      // Rule 1: same number adjacent
+      if (neighborNum === num) return false;
 
-    if (neighborIndex !== -1 && currentAssignments.has(neighborIndex)) {
-      const neighborNumber = currentAssignments.get(neighborIndex)!;
-      // 6 and 8 can't be adjacent to each other (including 6-6, 8-8, 6-8, 8-6)
-      if (neighborNumber === 6 || neighborNumber === 8) {
-        return true;
-      }
+      // Rule 2: 6/8 adjacent to each other
+      if ((num === 6 || num === 8) && (neighborNum === 6 || neighborNum === 8)) return false;
+
+      // Rule 3: 2 adjacent to 12
+      if ((num === 2 && neighborNum === 12) || (num === 12 && neighborNum === 2)) return false;
     }
   }
-
-  return false;
+  return true;
 }
 
-// Assign numbers to hexes following the 6/8 rule
+// Assign numbers to hexes satisfying both the no-duplicate-adjacent rule and the
+// 6/8 rule.  Uses a shuffle-and-validate loop: most random arrangements fail
+// (~7% pass on a standard board), so we retry until one succeeds.
 function assignNumbersWithRule(
   resources: ResourceType[],
   hexPositions: typeof STANDARD_HEX_POSITIONS
@@ -62,59 +63,30 @@ function assignNumbersWithRule(
   const numbers = [...STANDARD_NUMBER_DISTRIBUTION];
   const result: (number | null)[] = new Array(hexPositions.length).fill(null);
 
-  // Find indices of non-desert hexes
   const nonDesertIndices: number[] = [];
   resources.forEach((resource, index) => {
-    if (resource !== 'desert') {
-      nonDesertIndices.push(index);
-    }
+    if (resource !== 'desert') nonDesertIndices.push(index);
   });
 
-  // Separate 6s and 8s from other numbers
-  const redNumbers = numbers.filter(n => n === 6 || n === 8);
-  const otherNumbers = numbers.filter(n => n !== 6 && n !== 8);
+  for (let attempt = 0; attempt < 500; attempt++) {
+    const shuffledNumbers = shuffle([...numbers]);
+    const shuffledIndices = shuffle([...nonDesertIndices]);
 
-  // Try to place 6s and 8s first (they have the most constraints)
-  const currentAssignments = new Map<number, number>();
-  const shuffledRedNumbers = shuffle(redNumbers);
-  const shuffledIndices = shuffle([...nonDesertIndices]);
-
-  // Try to assign 6s and 8s
-  for (const num of shuffledRedNumbers) {
-    let placed = false;
-    for (const idx of shuffledIndices) {
-      if (!currentAssignments.has(idx) && !wouldViolate68Rule(idx, num, currentAssignments, hexPositions)) {
-        currentAssignments.set(idx, num);
-        result[idx] = num;
-        placed = true;
-        break;
-      }
+    const assignments = new Map<number, number>();
+    for (let i = 0; i < shuffledIndices.length; i++) {
+      assignments.set(shuffledIndices[i], shuffledNumbers[i]);
     }
 
-    // If we couldn't place following the rule, try harder with backtracking
-    if (!placed) {
-      // Find any available spot (relaxed rule - shouldn't happen with standard board)
-      for (const idx of shuffledIndices) {
-        if (!currentAssignments.has(idx)) {
-          currentAssignments.set(idx, num);
-          result[idx] = num;
-          break;
-        }
-      }
+    if (isValidNumberAssignment(assignments, hexPositions)) {
+      assignments.forEach((num, idx) => { result[idx] = num; });
+      return result;
     }
   }
 
-  // Assign remaining numbers to remaining spots
-  const shuffledOtherNumbers = shuffle(otherNumbers);
-  let numberIdx = 0;
-
-  for (const idx of nonDesertIndices) {
-    if (!currentAssignments.has(idx)) {
-      result[idx] = shuffledOtherNumbers[numberIdx];
-      numberIdx++;
-    }
-  }
-
+  // Safety fallback (should never be reached on a standard 19-hex board):
+  // assign randomly without guarantees.
+  const shuffledNumbers = shuffle([...numbers]);
+  nonDesertIndices.forEach((idx, i) => { result[idx] = shuffledNumbers[i]; });
   return result;
 }
 
@@ -316,6 +288,43 @@ export function getVertexPixelPosition(vertexId: string): { x: number; y: number
   return {
     x: parseInt(match[1], 10),
     y: parseInt(match[2], 10),
+  };
+}
+
+// Generate the official Catan recommended beginner setup (fixed layout)
+export function generateBalancedBoard(): BoardState {
+  const hexes = new Map<string, HexTile>();
+
+  STANDARD_HEX_POSITIONS.forEach((pos, index) => {
+    const { resource, number } = BALANCED_BOARD_LAYOUT[index];
+    const hexId = createHexId(pos.q, pos.r);
+
+    hexes.set(hexId, {
+      id: hexId,
+      q: pos.q,
+      r: pos.r,
+      resource,
+      number,
+      hasRobber: resource === 'desert',
+    });
+  });
+
+  const vertices = generateUniqueVertices(hexes);
+  const { portPlacements, ports } = assignPorts(hexes);
+
+  ports.forEach((portType, vertexId) => {
+    const vertex = vertices.get(vertexId);
+    if (vertex) {
+      vertex.hasPort = portType;
+    }
+  });
+
+  return {
+    hexes,
+    vertices,
+    edges: new Map(),
+    ports,
+    portPlacements,
   };
 }
 

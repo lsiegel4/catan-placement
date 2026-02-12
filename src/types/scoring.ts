@@ -36,3 +36,56 @@ export const DEFAULT_WEIGHTS: ScoreWeights = {
   scarcity: 0.3,
   complement: 0.7,
 };
+
+export interface ScorePreset {
+  label: string;
+  description: string;
+  weights: ScoreWeights;
+}
+
+export const SCORE_PRESETS: Record<string, ScorePreset> = {
+  balanced: {
+    label: 'Balanced',
+    description: 'All-round strategy',
+    weights: { ...DEFAULT_WEIGHTS },
+  },
+  cityBuilder: {
+    label: 'City Builder',
+    description: 'Ore & wheat for cities',
+    weights: {
+      probability: 1.0,
+      diversity: 0.5,
+      numberQuality: 1.0,
+      port: 0.3,
+      expansion: 0.2,
+      scarcity: 0.8,
+      complement: 0.9,
+    },
+  },
+  roadRush: {
+    label: 'Road Rush',
+    description: 'Wood & brick for roads',
+    weights: {
+      probability: 0.8,
+      diversity: 1.0,
+      numberQuality: 0.4,
+      port: 0.3,
+      expansion: 1.0,
+      scarcity: 0.3,
+      complement: 0.6,
+    },
+  },
+  portTrader: {
+    label: 'Port Trader',
+    description: 'Maximise port access',
+    weights: {
+      probability: 1.0,
+      diversity: 0.6,
+      numberQuality: 0.5,
+      port: 1.2,
+      expansion: 0.4,
+      scarcity: 0.4,
+      complement: 0.5,
+    },
+  },
+};

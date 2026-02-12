@@ -5,6 +5,7 @@ interface RecommendationCardProps {
   recommendation: VertexScore;
   rank: number;
   isSelected: boolean;
+  isFocused: boolean;
   onClick: () => void;
   explanationMode: 'beginner' | 'advanced';
 }
@@ -38,6 +39,7 @@ export function RecommendationCard({
   recommendation,
   rank,
   isSelected,
+  isFocused,
   onClick,
   explanationMode,
 }: RecommendationCardProps) {
@@ -61,16 +63,20 @@ export function RecommendationCard({
     <div
       onClick={onClick}
       className={`relative p-4 rounded-sm cursor-pointer transition-all duration-300 ${
-        isSelected ? 'ring-2 ring-amber-600' : 'hover:translate-x-1'
+        isSelected ? 'ring-2 ring-amber-600' : isFocused ? '' : 'hover:translate-x-1'
       }`}
       style={{
         background: isSelected
           ? 'linear-gradient(135deg, var(--parchment-light) 0%, var(--parchment) 100%)'
           : 'var(--parchment)',
-        border: `1.5px solid ${isSelected ? 'var(--copper)' : 'var(--sepia)'}`,
+        border: `1.5px solid ${isSelected ? 'var(--copper)' : isFocused ? 'var(--sepia-dark)' : 'var(--sepia)'}`,
         boxShadow: isSelected
           ? 'inset 0 0 20px rgba(184, 115, 51, 0.1), 2px 2px 8px rgba(0,0,0,0.1)'
+          : isFocused
+          ? 'inset 0 0 12px rgba(92, 74, 55, 0.08), 0 0 0 2px var(--sepia-dark)'
           : '1px 1px 3px rgba(0,0,0,0.08)',
+        outline: isFocused ? '1px dashed var(--sepia)' : 'none',
+        outlineOffset: '2px',
       }}
     >
       {/* Rank badge */}
@@ -205,15 +211,22 @@ export function RecommendationCard({
         </div>
       )}
 
-      {/* Selection indicator */}
-      {isSelected && (
+      {/* Status indicator */}
+      {isSelected ? (
         <div
           className="absolute bottom-1 right-1 text-xs italic"
           style={{ color: 'var(--copper)' }}
         >
           ◆ viewing
         </div>
-      )}
+      ) : isFocused ? (
+        <div
+          className="absolute bottom-1 right-1 text-xs"
+          style={{ color: 'var(--sepia)', fontFamily: 'Cinzel, serif', opacity: 0.7 }}
+        >
+          ↵ select
+        </div>
+      ) : null}
     </div>
   );
 }
