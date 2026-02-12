@@ -1,20 +1,34 @@
-import { BoardState } from '@/types/board';
+import { BoardState, Vertex as VertexType } from '@/types/board';
 import { VertexScore } from '@/types/scoring';
 import { HexTile } from './HexTile';
 import { Vertex } from './Vertex';
 import { OceanBorder } from './OceanBorder';
 import { hexToPixel, HEX_SIZE } from '@/lib/geometry/pixelConversion';
+import { isValidPlacement } from '@/lib/game/placementRules';
 
 interface HexGridProps {
   board: BoardState;
   selectedVertex: string | null;
   onVertexClick: (vertexId: string) => void;
   recommendations: VertexScore[];
+  isSetupComplete: boolean;
 }
 
-export function HexGrid({ board, selectedVertex, onVertexClick, recommendations }: HexGridProps) {
+export function HexGrid({ board, selectedVertex, onVertexClick, recommendations, isSetupComplete }: HexGridProps) {
   const hexArray = Array.from(board.hexes.values());
-  const vertexArray = Array.from(board.vertices.values());
+  const allVertices = Array.from(board.vertices.values());
+
+  // Determine which vertices to render:
+  // - Always show placed settlements
+  // - Hide everything once setup is complete (cleaner board view)
+  // - Otherwise only show vertices that are valid placement spots (or the selected one)
+  const shouldShow = (v: VertexType): boolean => {
+    if (v.hasSettlement) return true;
+    if (isSetupComplete) return false;
+    return isValidPlacement(v.id, board) || v.id === selectedVertex;
+  };
+
+  const vertexArray = allVertices.filter(shouldShow);
 
   // Calculate board bounds for centering
   let minX = Infinity, maxX = -Infinity;

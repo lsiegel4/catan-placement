@@ -15,6 +15,29 @@ function buildSnakeDraft(playerCount: number): number[] {
   return [...forward, ...forward.slice().reverse()];
 }
 
+// Find the first unfilled slot in the snake draft based on actual board state.
+// A slot for player P at occurrence k (0-indexed) is "filled" when P has placed
+// at least k+1 settlements. Returns snakeDraft.length when all slots are filled.
+function computeTurnIndex(snakeDraft: number[], board: BoardState): number {
+  const settlementsByColor: Record<string, number> = {};
+  board.vertices.forEach(v => {
+    if (v.hasSettlement && v.playerColor) {
+      settlementsByColor[v.playerColor] = (settlementsByColor[v.playerColor] || 0) + 1;
+    }
+  });
+
+  const occurrenceSoFar: Record<number, number> = {};
+  for (let i = 0; i < snakeDraft.length; i++) {
+    const playerIndex = snakeDraft[i];
+    const seen = occurrenceSoFar[playerIndex] ?? 0;
+    const color = PLAYER_COLORS[playerIndex]?.id ?? '';
+    const placed = settlementsByColor[color] ?? 0;
+    if (placed <= seen) return i; // This slot hasn't been claimed yet
+    occurrenceSoFar[playerIndex] = seen + 1;
+  }
+  return snakeDraft.length; // All slots filled = setup complete
+}
+
 export interface UseGameState {
   board: BoardState;
   boardMode: BoardMode;
@@ -37,14 +60,21 @@ export function useGameState(): UseGameState {
   const [boardMode, setBoardModeState] = useState<BoardMode>('random');
   const [board, setBoard] = useState<BoardState>(() => generateRandomBoard());
   const [playerCount, setPlayerCountState] = useState(4);
-  const [setupTurnIndex, setSetupTurnIndex] = useState(0);
 
   const snakeDraft = useMemo(() => buildSnakeDraft(playerCount), [playerCount]);
-  const totalSetupTurns = snakeDraft.length; // 2 × playerCount
+  const totalSetupTurns = snakeDraft.length;
+
+  // Derive turn from board state — no separate counter needed.
+  // This means the turn auto-corrects whenever settlements are placed or removed,
+  // and invalid placements (board unchanged) leave the turn index unchanged.
+  const setupTurnIndex = useMemo(
+    () => computeTurnIndex(snakeDraft, board),
+    [snakeDraft, board]
+  );
 
   const isSetupComplete = setupTurnIndex >= totalSetupTurns;
   const currentPlayerIndex = isSetupComplete
-    ? snakeDraft[totalSetupTurns - 1] // stay on last player after setup
+    ? snakeDraft[totalSetupTurns - 1]
     : snakeDraft[setupTurnIndex];
   const activeColor = PLAYER_COLORS[currentPlayerIndex]?.id ?? 'red';
 
@@ -59,14 +89,14 @@ export function useGameState(): UseGameState {
   }, [board]);
 
   const placeSettlement = useCallback((vertexId: string) => {
-    // Capture current active color before advancing the turn
-    const color = PLAYER_COLORS[
-      buildSnakeDraft(playerCount)[Math.min(setupTurnIndex, totalSetupTurns - 1)]
-    ]?.id ?? 'red';
-
-    setBoard(prev => doPlace(vertexId, prev, color));
-    setSetupTurnIndex(prev => Math.min(prev + 1, totalSetupTurns));
-  }, [playerCount, setupTurnIndex, totalSetupTurns]);
+    setBoard(prev => {
+      const turnIdx = computeTurnIndex(snakeDraft, prev);
+      if (turnIdx >= totalSetupTurns) return prev; // setup complete
+      const color = PLAYER_COLORS[snakeDraft[turnIdx]]?.id ?? 'red';
+      // doPlace returns prev unchanged if placement is invalid — turn won't advance
+      return doPlace(vertexId, prev, color);
+    });
+  }, [snakeDraft, totalSetupTurns]);
 
   const removeSettlement = useCallback((vertexId: string) => {
     setBoard(prev => doRemove(vertexId, prev));
@@ -82,24 +112,20 @@ export function useGameState(): UseGameState {
       });
       return { ...prev, vertices: newVertices };
     });
-    setSetupTurnIndex(0);
   }, []);
 
   const setPlayerCount = useCallback((n: number) => {
     setPlayerCountState(n);
-    setSetupTurnIndex(0);
     setBoard(boardMode === 'balanced' ? generateBalancedBoard() : generateRandomBoard());
   }, [boardMode]);
 
   const setBoardMode = useCallback((mode: BoardMode) => {
     setBoardModeState(mode);
-    setSetupTurnIndex(0);
     setBoard(mode === 'balanced' ? generateBalancedBoard() : generateRandomBoard());
   }, []);
 
   const generateNewBoard = useCallback(() => {
     setBoard(boardMode === 'balanced' ? generateBalancedBoard() : generateRandomBoard());
-    setSetupTurnIndex(0);
   }, [boardMode]);
 
   return {

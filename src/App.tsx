@@ -191,6 +191,7 @@ function App() {
                 selectedVertex={selectedVertex}
                 onVertexClick={handleVertexClick}
                 recommendations={recommendations}
+                isSetupComplete={game.isSetupComplete}
               />
 
               {/* Turn tracker */}

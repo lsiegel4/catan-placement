@@ -31,8 +31,24 @@ export function calculateVertexScore(
     .filter(hex => hex !== undefined);
 
   // Calculate individual score components
-  const probabilityScore = calculateProbabilityScore(adjacentHexes);
-  const diversityScore = calculateDiversityScore(adjacentHexes);
+  const rawProbabilityScore = calculateProbabilityScore(adjacentHexes);
+
+  // Opponent modeling: mildly penalise hexes shared with an opponent settlement.
+  // Each opponent that overlaps a hex with us reduces its effective value slightly
+  // (they roll the same numbers). Capped at a 25% reduction. Scarcity/diversity
+  // are intentionally left unchanged by opponent positions.
+  const candidateHexIds = new Set(vertex.adjacentHexes);
+  let contestedOpponents = 0;
+  board.vertices.forEach(v => {
+    if (!v.hasSettlement || v.playerColor === playerColor) return;
+    if (v.adjacentHexes.some(hexId => candidateHexIds.has(hexId))) {
+      contestedOpponents++;
+    }
+  });
+  const probabilityScore = rawProbabilityScore * Math.max(0.75, 1 - contestedOpponents * 0.08);
+
+  // Context-aware diversity: on 2nd+ placement, measures new portfolio coverage
+  const diversityScore = calculateDiversityScore(adjacentHexes, board, playerColor);
   const numberQualityScore = calculateNumberQualityScore(adjacentHexes);
   const portScore = calculatePortScore(vertex, adjacentHexes);
   const scarcityScore = calculateScarcityScore(adjacentHexes, board);
