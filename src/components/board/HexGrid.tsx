@@ -1,10 +1,16 @@
 import { BoardState, Vertex as VertexType } from '@/types/board';
-import { VertexScore } from '@/types/scoring';
+import { VertexScore, RoadSuggestion } from '@/types/scoring';
 import { HexTile } from './HexTile';
 import { Vertex } from './Vertex';
 import { OceanBorder } from './OceanBorder';
 import { hexToPixel, HEX_SIZE } from '@/lib/geometry/pixelConversion';
-import { isValidPlacement } from '@/lib/game/placementRules';
+import { isValidPlacement, } from '@/lib/game/placementRules';
+import { getVertexPixelPosition } from '@/lib/board/boardGeneration';
+import { PLAYER_COLORS } from '@/constants/players';
+
+const PLAYER_HEX: Record<string, string> = Object.fromEntries(
+  PLAYER_COLORS.map(p => [p.id, p.color])
+);
 
 interface HexGridProps {
   board: BoardState;
@@ -15,19 +21,50 @@ interface HexGridProps {
   isEditing: boolean;
   onEditHexResource: (hexId: string) => void;
   onEditHexNumber: (hexId: string) => void;
+  roadSuggestions?: RoadSuggestion[];
+  focusedRoadKey?: string | null;
+  pendingRoadFor?: string | null;
+  activeColor?: string;
 }
 
-export function HexGrid({ board, selectedVertex, onVertexClick, recommendations, isSetupComplete, isEditing, onEditHexResource, onEditHexNumber }: HexGridProps) {
+export function HexGrid({ board, selectedVertex, onVertexClick, recommendations, isSetupComplete, isEditing, onEditHexResource, onEditHexNumber, roadSuggestions = [], focusedRoadKey = null, pendingRoadFor = null, activeColor = 'red' }: HexGridProps) {
   const hexArray = Array.from(board.hexes.values());
   const allVertices = Array.from(board.vertices.values());
 
+  // Pre-compute road-phase adjacency set once.
+  const roadTargetSet: Set<string> = pendingRoadFor
+    ? new Set(board.vertices.get(pendingRoadFor)?.adjacentVertices ?? [])
+    : new Set();
+
+  const activeColorHex = PLAYER_HEX[activeColor] ?? '#888';
+
+  // Map: road endpoint vertex → rank (1-based) within its settlement's suggestions.
+  // Used to style the top road target differently from alternatives.
+  const roadRankMap = new Map<string, number>();
+  if (pendingRoadFor) {
+    roadSuggestions.forEach((s, i) => {
+      if (!roadRankMap.has(s.toVertex)) {
+        roadRankMap.set(s.toVertex, i + 1);
+      }
+    });
+  }
+
+  // Ghost vertices: the best target expansion spot for the focused road suggestion.
+  const focusedSuggestion = focusedRoadKey
+    ? roadSuggestions.find(r => `${r.fromVertex}|${r.toVertex}` === focusedRoadKey)
+    : null;
+  const ghostVertexSet = new Set<string>(focusedSuggestion?.targetVertices ?? []);
+
   // Determine which vertices to render:
   // - Always show placed settlements
+  // - Road phase: show vertices adjacent to the pending settlement (road endpoints)
   // - Hide everything once setup is complete (cleaner board view)
   // - Otherwise only show vertices that are valid placement spots (or the selected one)
   const shouldShow = (v: VertexType): boolean => {
     if (v.hasSettlement) return true;
-    if (isEditing) return false; // hide dots while editing the board layout
+    if (isEditing) return false;
+    if (ghostVertexSet.has(v.id)) return true; // always show focused road targets
+    if (pendingRoadFor) return roadTargetSet.has(v.id); // road phase
     if (isSetupComplete) return false;
     return isValidPlacement(v.id, board) || v.id === selectedVertex;
   };
@@ -102,15 +139,78 @@ export function HexGrid({ board, selectedVertex, onVertexClick, recommendations,
             />
           ))}
 
+          {/* Placed roads (solid lines from board.edges) */}
+          {Array.from(board.edges.values()).map(edge => {
+            const from = getVertexPixelPosition(edge.vertexA);
+            const to = getVertexPixelPosition(edge.vertexB);
+            if (!from || !to) return null;
+            const color = PLAYER_HEX[edge.playerColor ?? 'red'] ?? '#888';
+            return (
+              <line
+                key={edge.id}
+                x1={from.x} y1={from.y}
+                x2={to.x} y2={to.y}
+                stroke={color}
+                strokeWidth={6}
+                strokeLinecap="round"
+                opacity={0.9}
+              />
+            );
+          })}
+
+          {/* Road suggestion lines — shown after setup.
+              Top suggestion per settlement: full opacity.
+              Alternatives: very faint. Focused: bright solid. */}
+          {isSetupComplete && (() => {
+            // Determine which toVertex is the #1 suggestion for each settlement.
+            const topPerSettlement = new Set<string>();
+            const seen = new Set<string>();
+            roadSuggestions.forEach(r => {
+              if (!seen.has(r.fromVertex)) {
+                seen.add(r.fromVertex);
+                topPerSettlement.add(`${r.fromVertex}|${r.toVertex}`);
+              }
+            });
+
+            return roadSuggestions.map(road => {
+              const from = getVertexPixelPosition(road.fromVertex);
+              const to = getVertexPixelPosition(road.toVertex);
+              if (!from || !to) return null;
+              const key = `${road.fromVertex}|${road.toVertex}`;
+              const isFocused = focusedRoadKey === key;
+              const isTop = topPerSettlement.has(key);
+              const color = PLAYER_HEX[road.playerColor] ?? '#888';
+              const opacity = isFocused ? 0.95 : isTop ? 0.6 : 0.18;
+              const strokeWidth = isFocused ? 5 : isTop ? 3.5 : 2.5;
+              const dashArray = isFocused ? '9,4' : '6,5';
+              return (
+                <line
+                  key={key}
+                  x1={from.x} y1={from.y}
+                  x2={to.x} y2={to.y}
+                  stroke={color}
+                  strokeWidth={strokeWidth}
+                  strokeDasharray={dashArray}
+                  strokeLinecap="round"
+                  opacity={opacity}
+                />
+              );
+            });
+          })()}
+
           {/* Render vertices on top */}
           {vertexArray.map(vertex => (
             <Vertex
               key={vertex.id}
               vertex={vertex}
               isSelected={vertex.id === selectedVertex}
-              isTopRecommendation={vertex.id === topRecommendation}
-              score={vertexScoreMap.get(vertex.id)}
+              isTopRecommendation={vertex.id === topRecommendation && !pendingRoadFor}
+              score={pendingRoadFor ? undefined : vertexScoreMap.get(vertex.id)}
               onClick={() => onVertexClick(vertex.id)}
+              isRoadTarget={pendingRoadFor !== null && roadTargetSet.has(vertex.id)}
+              roadTargetColor={activeColorHex}
+              roadRank={roadRankMap.get(vertex.id)}
+              isGhost={ghostVertexSet.has(vertex.id) && !vertex.hasSettlement}
             />
           ))}
         </g>

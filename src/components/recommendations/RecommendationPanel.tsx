@@ -1,7 +1,8 @@
 import React from 'react';
-import { VertexScore, ScoreWeights, DEFAULT_WEIGHTS } from '@/types/scoring';
+import { VertexScore, ScoreWeights, DEFAULT_WEIGHTS, RoadSuggestion } from '@/types/scoring';
 import { RecommendationCard } from './RecommendationCard';
 import { WeightsPanel } from '@/components/scoring/WeightsPanel';
+import { RoadSuggestionsSection } from './RoadSuggestionsSection';
 
 interface RecommendationPanelProps {
   recommendations: VertexScore[];
@@ -13,6 +14,11 @@ interface RecommendationPanelProps {
   onFocusChange: (index: number) => void;
   weights: ScoreWeights;
   onWeightsChange: (w: ScoreWeights) => void;
+  isSetupComplete?: boolean;
+  pendingRoadFor?: string | null;
+  roadSuggestions?: RoadSuggestion[];
+  focusedRoadKey?: string | null;
+  onRoadFocus?: (key: string | null) => void;
 }
 
 export function RecommendationPanel({
@@ -25,6 +31,11 @@ export function RecommendationPanel({
   onFocusChange,
   weights,
   onWeightsChange,
+  isSetupComplete = false,
+  pendingRoadFor = null,
+  roadSuggestions = [],
+  focusedRoadKey = null,
+  onRoadFocus,
 }: RecommendationPanelProps) {
   const isCustomWeights = Object.keys(DEFAULT_WEIGHTS).some(k => {
     const w = weights as unknown as Record<string, number>;
@@ -53,11 +64,20 @@ export function RecommendationPanel({
         </div>
 
         <h2 className="text-lg text-center tracking-wider" style={{ fontFamily: 'Cinzel, serif', color: 'var(--ink)' }}>
-          Strategic Positions
+          {(isSetupComplete || pendingRoadFor) ? 'Road Planning' : 'Strategic Positions'}
         </h2>
 
-        {/* Mode toggle + weights gear */}
-        <div className="flex justify-center items-center mt-3 gap-2">
+        {/* Mode toggle + weights gear — only in settlement mode */}
+        {(isSetupComplete || pendingRoadFor) && (
+          <p className="text-center text-xs mt-2 italic" style={{ color: 'var(--ink-faded)' }}>
+            {pendingRoadFor && !isSetupComplete
+              ? 'Click the map or select a road below'
+              : 'Hover a road to preview it on the map'}
+          </p>
+        )}
+
+        {/* Mode toggle + weights gear — settlement mode only */}
+        {!(isSetupComplete || pendingRoadFor) && <div className="flex justify-center items-center mt-3 gap-2">
           <div
             className="flex rounded-full p-1 gap-1"
             style={{ background: 'var(--parchment-dark)', border: '1px solid var(--sepia)' }}
@@ -112,17 +132,23 @@ export function RecommendationPanel({
               />
             )}
           </button>
-        </div>
+        </div>}
       </div>
 
-      {/* Weights panel (collapsible) */}
-      {weightsOpen && (
+      {/* Weights panel (collapsible) — only in settlement mode */}
+      {!(isSetupComplete || pendingRoadFor) && weightsOpen && (
         <WeightsPanel weights={weights} onChange={onWeightsChange} />
       )}
 
-      {/* Recommendations List */}
+      {/* Body: Settlement recommendations OR Road planning */}
       <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
-        {recommendations.length === 0 ? (
+        {(isSetupComplete || pendingRoadFor) ? (
+          <RoadSuggestionsSection
+            suggestions={roadSuggestions}
+            focusedKey={focusedRoadKey}
+            onFocus={onRoadFocus ?? (() => {})}
+          />
+        ) : recommendations.length === 0 ? (
           <div className="text-center py-8" style={{ color: 'var(--ink-faded)' }}>
             <svg className="w-12 h-12 mx-auto mb-3 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -148,7 +174,7 @@ export function RecommendationPanel({
       <div className="px-4 py-3 text-center border-t" style={{ borderColor: 'var(--sepia)', color: 'var(--ink-faded)' }}>
         <p className="text-xs italic flex items-center justify-center gap-2">
           <span className="opacity-60">⚓</span>
-          Select a position to view details
+          {(isSetupComplete || pendingRoadFor) ? 'Hover a road card to preview on the map' : 'Select a position to view details'}
           <span className="opacity-60">⚓</span>
         </p>
       </div>

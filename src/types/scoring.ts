@@ -37,6 +37,18 @@ export const DEFAULT_WEIGHTS: ScoreWeights = {
   complement: 0.7,
 };
 
+export interface RoadSuggestion {
+  fromVertex: string;           // settlement vertex ID
+  toVertex: string;             // road endpoint vertex ID (1 hop from settlement)
+  playerColor: string;          // player color ID
+  score: number;                // 0–1 quality score
+  expansionSpots: number;       // count of valid settlement spots reachable beyond this road
+  contestRisk: 'low' | 'medium' | 'high';
+  hasPortAccess: boolean;
+  newHexResources: string[];    // resources of new hexes accessible via this road
+  targetVertices: string[];     // top reachable settlement spot vertex IDs
+}
+
 export interface ScorePreset {
   label: string;
   description: string;

@@ -7,9 +7,13 @@ interface VertexProps {
   isTopRecommendation: boolean;
   score?: number;
   onClick: () => void;
+  isRoadTarget?: boolean;
+  roadTargetColor?: string; // hex color for the road-phase dot
+  roadRank?: number;        // 1 = top recommendation, 2+ = alternative
+  isGhost?: boolean;        // faint "target destination" indicator
 }
 
-export function Vertex({ vertex, isSelected, isTopRecommendation, score, onClick }: VertexProps) {
+export function Vertex({ vertex, isSelected, isTopRecommendation, score, onClick, isRoadTarget, roadTargetColor, roadRank, isGhost }: VertexProps) {
   // Get position from vertex ID
   const position = getVertexPixelPosition(vertex.id);
   if (!position) return null;
@@ -32,7 +36,21 @@ export function Vertex({ vertex, isSelected, isTopRecommendation, score, onClick
     white: { fill: '#ecf0f1', stroke: '#bdc3c7' },
   };
 
-  if (vertex.hasSettlement) {
+  if (isGhost) {
+    // Faint ghost dot showing target expansion spot when hovering a road suggestion
+    fill = 'rgba(255,255,255,0.25)';
+    radius = 7;
+    strokeWidth = 1.5;
+    stroke = 'rgba(255,255,255,0.5)';
+  } else if (isRoadTarget && roadTargetColor) {
+    // Road-placement phase: top recommendation is larger and pulsing
+    fill = roadTargetColor;
+    radius = roadRank === 1 ? 11 : 7;
+    strokeWidth = 2;
+    stroke = 'rgba(255,255,255,0.8)';
+    showPulse = roadRank === 1;
+    glowColor = roadTargetColor;
+  } else if (vertex.hasSettlement) {
     const colors = SETTLEMENT_COLORS[vertex.playerColor || 'red'] || SETTLEMENT_COLORS.red;
     fill = colors.fill;
     radius = 12;
@@ -173,6 +191,25 @@ export function Vertex({ vertex, isSelected, isTopRecommendation, score, onClick
             fill="#1a1a1a"
           >
             1
+          </text>
+        </g>
+      )}
+
+      {/* Road rank badge (#1 recommended road during road-placement phase) */}
+      {isRoadTarget && roadRank === 1 && (
+        <g transform={`translate(${x + 9}, ${y - 11})`}>
+          <circle r="8" fill="#f1c40f" stroke="#d4ac0d" strokeWidth="1.5" />
+          <text
+            x="0"
+            y="1"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontSize="10"
+            fontWeight="bold"
+            fontFamily="Arial, sans-serif"
+            fill="#1a1a1a"
+          >
+            ★
           </text>
         </g>
       )}

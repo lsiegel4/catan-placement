@@ -4,6 +4,7 @@ import { RecommendationPanel } from '@/components/recommendations/Recommendation
 import { BoardRatingBadge } from '@/components/board/BoardRatingBadge';
 import { TurnTracker } from '@/components/game/TurnTracker';
 import { getTopRecommendations } from '@/lib/scoring/scoreCalculator';
+import { getAllRoadSuggestions } from '@/lib/scoring/roadScore';
 import { rateBoard } from '@/lib/board/boardRating';
 import { useGameState } from '@/hooks/useGameState';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -17,6 +18,7 @@ function App() {
   const [focusedRecIndex, setFocusedRecIndex] = useState<number>(0);
   const [weights, setWeights] = useState<ScoreWeights>(DEFAULT_WEIGHTS);
   const [isEditingBoard, setIsEditingBoard] = useState(false);
+  const [focusedRoadKey, setFocusedRoadKey] = useState<string | null>(null);
 
   const isEditing = game.boardMode === 'manual' && isEditingBoard;
 
@@ -27,9 +29,28 @@ function App() {
 
   const boardRating = useMemo(() => rateBoard(game.board), [game.board]);
 
+  // During road phase: suggestions for the settlement awaiting its road.
+  // After setup: suggestions for all settlements.
+  const roadSuggestions = useMemo(() => {
+    if (game.pendingRoadFor) {
+      return getAllRoadSuggestions(game.board).filter(
+        s => s.fromVertex === game.pendingRoadFor
+      );
+    }
+    if (game.isSetupComplete) return getAllRoadSuggestions(game.board);
+    return [];
+  }, [game.board, game.isSetupComplete, game.pendingRoadFor]);
+
   const handleVertexClick = useCallback((vertexId: string) => {
     const vertex = game.board.vertices.get(vertexId);
     if (!vertex) return;
+
+    // Road phase: any click on an adjacent vertex places the road immediately.
+    if (game.setupPhase === 'road') {
+      game.placeRoad(vertexId);
+      setFocusedRoadKey(null);
+      return;
+    }
 
     if (vertex.hasSettlement) {
       game.removeSettlement(vertexId);
@@ -229,6 +250,10 @@ function App() {
                 isEditing={isEditing}
                 onEditHexResource={game.editHexResource}
                 onEditHexNumber={game.editHexNumber}
+                roadSuggestions={roadSuggestions}
+                focusedRoadKey={focusedRoadKey}
+                pendingRoadFor={game.pendingRoadFor}
+                activeColor={game.activeColor}
               />
 
               {/* Turn tracker */}
@@ -239,6 +264,7 @@ function App() {
                 playerCount={game.playerCount}
                 onSetPlayerCount={game.setPlayerCount}
                 settlementCounts={game.settlementCounts}
+                setupPhase={game.setupPhase}
               />
 
               {/* Actions row */}
@@ -259,6 +285,8 @@ function App() {
                 <p className="text-xs italic" style={{ color: 'var(--ink-faded)' }}>
                   {isEditing
                     ? 'Click a hex to cycle its resource. Click a number token to cycle its value.'
+                    : game.setupPhase === 'road'
+                    ? 'Click an adjacent vertex to place your road.'
                     : 'Click a spot to select, click again to place. Click a settlement to remove it.'}
                 </p>
               </div>
@@ -301,6 +329,11 @@ function App() {
               onFocusChange={setFocusedRecIndex}
               weights={weights}
               onWeightsChange={setWeights}
+              isSetupComplete={game.isSetupComplete}
+              pendingRoadFor={game.pendingRoadFor}
+              roadSuggestions={roadSuggestions}
+              focusedRoadKey={focusedRoadKey}
+              onRoadFocus={setFocusedRoadKey}
             />
           </div>
         </div>

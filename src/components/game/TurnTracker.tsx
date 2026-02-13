@@ -7,6 +7,7 @@ interface TurnTrackerProps {
   playerCount: number;
   onSetPlayerCount: (n: number) => void;
   settlementCounts: Record<string, number>;
+  setupPhase?: 'settlement' | 'road';
 }
 
 export function TurnTracker({
@@ -16,6 +17,7 @@ export function TurnTracker({
   playerCount,
   onSetPlayerCount,
   settlementCounts,
+  setupPhase = 'settlement',
 }: TurnTrackerProps) {
   const currentStep = Math.min(setupTurnIndex, snakeDraft.length - 1);
 
@@ -27,7 +29,11 @@ export function TurnTracker({
           className="text-xs tracking-widest uppercase"
           style={{ color: 'var(--ink-faded)', fontFamily: 'Cinzel, serif' }}
         >
-          {isSetupComplete ? 'Setup Complete' : `Turn ${setupTurnIndex + 1} of ${snakeDraft.length}`}
+          {isSetupComplete
+            ? 'Setup Complete'
+            : setupPhase === 'road'
+            ? `Turn ${setupTurnIndex} of ${snakeDraft.length} — Place Road`
+            : `Turn ${setupTurnIndex + 1} of ${snakeDraft.length} — Place Settlement`}
         </span>
 
         {/* Player count selector */}

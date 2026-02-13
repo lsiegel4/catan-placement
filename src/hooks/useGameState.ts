@@ -4,11 +4,13 @@ import { generateRandomBoard, generateBalancedBoard, createEmptyBoard } from '@/
 import {
   placeSettlement as doPlace,
   removeSettlement as doRemove,
+  isValidPlacement,
 } from '@/lib/game/placementRules';
 import { PLAYER_COLORS } from '@/constants/players';
 import { ResourceType } from '@/types/board';
 
 export type BoardMode = 'random' | 'balanced' | 'manual';
+export type SetupPhase = 'settlement' | 'road';
 
 const RESOURCE_CYCLE: ResourceType[] = ['desert', 'wheat', 'wood', 'brick', 'ore', 'sheep'];
 const NUMBER_CYCLE: (number | null)[] = [null, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12];
@@ -19,9 +21,7 @@ function buildSnakeDraft(playerCount: number): number[] {
   return [...forward, ...forward.slice().reverse()];
 }
 
-// Find the first unfilled slot in the snake draft based on actual board state.
-// A slot for player P at occurrence k (0-indexed) is "filled" when P has placed
-// at least k+1 settlements. Returns snakeDraft.length when all slots are filled.
+// Find the first unfilled settlement slot in the snake draft based on actual board state.
 function computeTurnIndex(snakeDraft: number[], board: BoardState): number {
   const settlementsByColor: Record<string, number> = {};
   board.vertices.forEach(v => {
@@ -36,10 +36,10 @@ function computeTurnIndex(snakeDraft: number[], board: BoardState): number {
     const seen = occurrenceSoFar[playerIndex] ?? 0;
     const color = PLAYER_COLORS[playerIndex]?.id ?? '';
     const placed = settlementsByColor[color] ?? 0;
-    if (placed <= seen) return i; // This slot hasn't been claimed yet
+    if (placed <= seen) return i;
     occurrenceSoFar[playerIndex] = seen + 1;
   }
-  return snakeDraft.length; // All slots filled = setup complete
+  return snakeDraft.length;
 }
 
 export interface UseGameState {
@@ -50,9 +50,12 @@ export interface UseGameState {
   snakeDraft: number[];
   currentPlayerIndex: number;
   activeColor: string;
+  setupPhase: SetupPhase;
+  pendingRoadFor: string | null;
   isSetupComplete: boolean;
   settlementCounts: Record<string, number>;
   placeSettlement: (vertexId: string) => void;
+  placeRoad: (toVertexId: string) => void;
   removeSettlement: (vertexId: string) => void;
   clearAll: () => void;
   setPlayerCount: (n: number) => void;
@@ -66,22 +69,34 @@ export function useGameState(): UseGameState {
   const [boardMode, setBoardModeState] = useState<BoardMode>('random');
   const [board, setBoard] = useState<BoardState>(() => generateRandomBoard());
   const [playerCount, setPlayerCountState] = useState(4);
+  // Tracks which settlement vertex is waiting for its road placement.
+  const [pendingRoadFor, setPendingRoadFor] = useState<string | null>(null);
 
   const snakeDraft = useMemo(() => buildSnakeDraft(playerCount), [playerCount]);
   const totalSetupTurns = snakeDraft.length;
 
-  // Derive turn from board state — no separate counter needed.
-  // This means the turn auto-corrects whenever settlements are placed or removed,
-  // and invalid placements (board unchanged) leave the turn index unchanged.
   const setupTurnIndex = useMemo(
     () => computeTurnIndex(snakeDraft, board),
     [snakeDraft, board]
   );
 
-  const isSetupComplete = setupTurnIndex >= totalSetupTurns;
-  const currentPlayerIndex = isSetupComplete
-    ? snakeDraft[totalSetupTurns - 1]
-    : snakeDraft[setupTurnIndex];
+  // Setup is only complete once all settlements AND all roads are placed.
+  const isSetupComplete = setupTurnIndex >= totalSetupTurns && pendingRoadFor === null;
+
+  const setupPhase: SetupPhase = pendingRoadFor !== null ? 'road' : 'settlement';
+
+  // Active player: the one who placed pendingRoadFor during road phase,
+  // otherwise the next settlement player.
+  const currentPlayerIndex = (() => {
+    if (pendingRoadFor !== null) {
+      const color = board.vertices.get(pendingRoadFor)?.playerColor;
+      const idx = PLAYER_COLORS.findIndex(p => p.id === color);
+      return idx >= 0 ? idx : snakeDraft[0];
+    }
+    if (setupTurnIndex >= totalSetupTurns) return snakeDraft[totalSetupTurns - 1];
+    return snakeDraft[setupTurnIndex];
+  })();
+
   const activeColor = PLAYER_COLORS[currentPlayerIndex]?.id ?? 'red';
 
   const settlementCounts = useMemo(() => {
@@ -94,19 +109,69 @@ export function useGameState(): UseGameState {
     return counts;
   }, [board]);
 
+  // Place a settlement. On success, locks the turn into road-placement phase
+  // for the same player (they must immediately place a road).
   const placeSettlement = useCallback((vertexId: string) => {
-    setBoard(prev => {
-      const turnIdx = computeTurnIndex(snakeDraft, prev);
-      if (turnIdx >= totalSetupTurns) return prev; // setup complete
-      const color = PLAYER_COLORS[snakeDraft[turnIdx]]?.id ?? 'red';
-      // doPlace returns prev unchanged if placement is invalid — turn won't advance
-      return doPlace(vertexId, prev, color);
-    });
-  }, [snakeDraft, totalSetupTurns]);
+    if (pendingRoadFor !== null) return; // must place road first
 
+    const turnIdx = computeTurnIndex(snakeDraft, board);
+    if (turnIdx >= totalSetupTurns) return;
+
+    const color = PLAYER_COLORS[snakeDraft[turnIdx]]?.id ?? 'red';
+    if (!isValidPlacement(vertexId, board)) return;
+
+    const newBoard = doPlace(vertexId, board, color);
+    if (newBoard !== board) {
+      setBoard(newBoard);
+      setPendingRoadFor(vertexId);
+    }
+  }, [snakeDraft, totalSetupTurns, pendingRoadFor, board]);
+
+  // Place a road from the pending settlement to an adjacent vertex.
+  const placeRoad = useCallback((toVertexId: string) => {
+    if (!pendingRoadFor) return;
+
+    const fromVertex = board.vertices.get(pendingRoadFor);
+    if (!fromVertex) return;
+
+    // Must be directly adjacent to the settlement.
+    if (!fromVertex.adjacentVertices.includes(toVertexId)) return;
+
+    const playerColor = fromVertex.playerColor ?? 'red';
+    const [a, b] = [pendingRoadFor, toVertexId].sort();
+    const edgeId = `road_${a}_${b}`;
+
+    if (board.edges.has(edgeId)) return;
+
+    const newEdges = new Map(board.edges);
+    newEdges.set(edgeId, {
+      id: edgeId,
+      vertexA: pendingRoadFor,
+      vertexB: toVertexId,
+      hasRoad: true,
+      playerColor,
+    });
+
+    setBoard(prev => ({ ...prev, edges: newEdges }));
+    setPendingRoadFor(null);
+  }, [pendingRoadFor, board]);
+
+  // Remove a settlement and its associated road (if placed), reset road-pending state.
   const removeSettlement = useCallback((vertexId: string) => {
-    setBoard(prev => doRemove(vertexId, prev));
-  }, []);
+    setBoard(prev => {
+      const newBoard = doRemove(vertexId, prev);
+      const newEdges = new Map(newBoard.edges);
+      newEdges.forEach((edge, id) => {
+        if (edge.vertexA === vertexId || edge.vertexB === vertexId) {
+          newEdges.delete(id);
+        }
+      });
+      return { ...newBoard, edges: newEdges };
+    });
+    if (pendingRoadFor === vertexId) {
+      setPendingRoadFor(null);
+    }
+  }, [pendingRoadFor]);
 
   const clearAll = useCallback(() => {
     setBoard(prev => {
@@ -116,22 +181,26 @@ export function useGameState(): UseGameState {
           newVertices.set(id, { ...v, hasSettlement: false, playerColor: undefined });
         }
       });
-      return { ...prev, vertices: newVertices };
+      return { ...prev, vertices: newVertices, edges: new Map() };
     });
+    setPendingRoadFor(null);
   }, []);
 
   const setPlayerCount = useCallback((n: number) => {
     setPlayerCountState(n);
     setBoard(boardMode === 'balanced' ? generateBalancedBoard() : boardMode === 'manual' ? createEmptyBoard() : generateRandomBoard());
+    setPendingRoadFor(null);
   }, [boardMode]);
 
   const setBoardMode = useCallback((mode: BoardMode) => {
     setBoardModeState(mode);
     setBoard(mode === 'balanced' ? generateBalancedBoard() : mode === 'manual' ? createEmptyBoard() : generateRandomBoard());
+    setPendingRoadFor(null);
   }, []);
 
   const generateNewBoard = useCallback(() => {
     setBoard(boardMode === 'balanced' ? generateBalancedBoard() : boardMode === 'manual' ? createEmptyBoard() : generateRandomBoard());
+    setPendingRoadFor(null);
   }, [boardMode]);
 
   const editHexResource = useCallback((hexId: string) => {
@@ -170,9 +239,12 @@ export function useGameState(): UseGameState {
     snakeDraft,
     currentPlayerIndex,
     activeColor,
+    setupPhase,
+    pendingRoadFor,
     isSetupComplete,
     settlementCounts,
     placeSettlement,
+    placeRoad,
     removeSettlement,
     clearAll,
     setBoardMode,
