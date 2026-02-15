@@ -1,11 +1,9 @@
 import { useState, useMemo, useCallback } from 'react';
 import { HexGrid } from '@/components/board/HexGrid';
 import { RecommendationPanel } from '@/components/recommendations/RecommendationPanel';
-import { BoardRatingBadge } from '@/components/board/BoardRatingBadge';
 import { TurnTracker } from '@/components/game/TurnTracker';
 import { getTopRecommendations } from '@/lib/scoring/scoreCalculator';
 import { getAllRoadSuggestions } from '@/lib/scoring/roadScore';
-import { rateBoard } from '@/lib/board/boardRating';
 import { useGameState } from '@/hooks/useGameState';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { ScoreWeights, DEFAULT_WEIGHTS } from '@/types/scoring';
@@ -26,8 +24,6 @@ function App() {
     () => getTopRecommendations(game.board, 5, weights, explanationMode, game.activeColor),
     [game.board, weights, explanationMode, game.activeColor]
   );
-
-  const boardRating = useMemo(() => rateBoard(game.board), [game.board]);
 
   // During road phase: suggestions for the settlement awaiting its road.
   // After setup: suggestions for all settlements.
@@ -233,11 +229,6 @@ function App() {
                     {isEditingBoard ? '✓ Done Editing' : '✏ Edit Board'}
                   </button>
                 )}
-              </div>
-
-              {/* Board rating badge */}
-              <div className="absolute top-3 right-3">
-                <BoardRatingBadge rating={boardRating} />
               </div>
 
               {/* Hex board */}
